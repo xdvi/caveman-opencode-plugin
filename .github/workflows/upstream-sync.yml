@@ -1,0 +1,54 @@
+name: upstream-sync
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: resolve upstream head
+        id: head
+        run: echo "sha=$(git ls-remote https://github.com/JuliusBrussee/caveman.git HEAD | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: compare with pin
+        id: diff
+        run: |
+          pinned=$(python3 -c "import json; print(json.load(open('UPSTREAM_PIN.json'))['sha'])")
+          if [ "$pinned" = "${{ steps.head.outputs.sha }}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: sync vendor
+        if: steps.diff.outputs.changed == 'true'
+        run: sh scripts/sync-upstream.sh "${{ steps.head.outputs.sha }}"
+
+      - name: contract tests
+        id: tests
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        run: bun test
+
+      - name: open sync pr
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/upstream-sync-${{ steps.head.outputs.sha }}
+          title: "chore: sync upstream ${{ steps.head.outputs.sha }}"
+          body: |
+            upstream `JuliusBrussee/caveman` moved to `${{ steps.head.outputs.sha }}`.
+
+            contract tests: `${{ steps.tests.outcome }}`.
+            if red, the upstream change is blocking and needs a maintainer fix before merge.
+          labels: upstream-sync

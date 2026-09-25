@@ -1,0 +1,12 @@
+{
+  "name": "caveman-opencode-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "description": "tracks upstream JuliusBrussee/caveman opencode plugin at a pinned sha",
+  "type": "module",
+  "main": "adapter/v2/caveman.ts",
+  "scripts": {
+    "test": "bun test",
+    "sync": "sh scripts/sync-upstream.sh"
+  }
+}
