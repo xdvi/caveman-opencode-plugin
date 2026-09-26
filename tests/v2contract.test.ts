@@ -130,4 +130,16 @@ describe("v2 adapter", () => {
     expect(mod.default.id).toBe("caveman");
     process.env.CAVEMAN_HELPERS_DIR = join(ROOT, "vendor", "src", "hooks");
   });
+
+  test("trims oversized mode log on setup", async () => {
+    const { writeFileSync, statSync } = await import("node:fs");
+    const log = join(home, "opencode", ".caveman-mode-log.jsonl");
+    writeFileSync(log, Array.from({ length: 5000 }, (_, i) => `{"i":${i},"pad":"${"x".repeat(300)}"}`).join("\n") + "\n");
+    expect(statSync(log).size).toBeGreaterThan(1024 * 1024);
+    const { ctx } = makeCtx();
+    await adapter.default.setup(ctx);
+    const lines = readFileSync(log, "utf8").split("\n").filter(Boolean);
+    expect(lines.length).toBeLessThanOrEqual(1000);
+    expect(lines.some((line) => JSON.parse(line).i === 4999)).toBe(true);
+  });
 });

@@ -29,9 +29,13 @@ This repository provides:
 ├── scripts/
 │   ├── install-pinned.sh      # Surgical installer for OpenCode plugins directory
 │   └── sync-upstream.sh       # Sync script fetching upstream commits and updating pin
+├── shell/
+│   ├── caveman-prompt.sh      # PS1 segment for bash/zsh
+│   └── caveman-prompt.fish    # PS1 segment for fish
 ├── tests/
 │   ├── contract.test.ts       # Byte-for-byte pin validation and vendor behavior tests
 │   ├── v2contract.test.ts     # OpenCode v2 mock context & deduplication tests
+│   ├── installed.test.ts      # Installed payload matches vendor bytes
 │   └── install.test.ts        # Surgical installer integration tests
 ├── vendor/                    # Verbatim payload from upstream pinned SHA
 ├── UPSTREAM_PIN.json          # Pinned commit SHA and per-file SHA256 hashes
@@ -42,12 +46,26 @@ This repository provides:
 
 ## Installation
 
-### Automatic (Recommended)
+### Remote spec (primary)
+
+```json
+{ "plugins": ["github:xdvi/caveman-opencode-plugin"] }
+```
+
+Luego `opencode plugin update` para refrescar. Sin clon local.
+
+### Automatic (from clone)
 
 Run the surgical installer script:
 
 ```sh
 sh scripts/install-pinned.sh
+```
+
+Dev mode (symlinks al repo; `git pull` actualiza el plugin vivo):
+
+```sh
+sh scripts/install-pinned.sh --link
 ```
 
 To preview the actions without modifying any files:
@@ -78,6 +96,9 @@ Once installed, restart your OpenCode session or daemon:
 
 - **Switch mode**: `/caveman lite`, `/caveman full`, `/caveman ultra`
 - **Revert to normal**: Type `stop caveman` or `normal mode`
+- **Shell prompt**: `source shell/caveman-prompt.sh` (bash/zsh) or
+  `shell/caveman-prompt.fish` (fish), then use `$(caveman_prompt_segment)`
+  in `PS1` — shows `caveman:<mode>` from the active flag.
 
 ---
 

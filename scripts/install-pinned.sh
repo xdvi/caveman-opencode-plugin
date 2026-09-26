@@ -12,15 +12,29 @@ plugin_dir="$config_dir/plugins/caveman"
 commands_dir="$config_dir/commands"
 skills_dir="$config_dir/skills"
 
+link=false
+if [ "${1:-}" = "--link" ]; then
+  link=true
+  shift
+fi
+
 mkdir -p "$plugin_dir" "$commands_dir" "$config_dir/plugins"
 
+put() {
+  if $link; then
+    ln -sfn "$1" "$2"
+  else
+    cp "$1" "$2"
+  fi
+}
+
 # 1. Install CJS helpers from vendored hooks
-cp "$REPO_DIR/vendor/src/hooks/caveman-config.js" "$plugin_dir/caveman-config.cjs"
-cp "$REPO_DIR/vendor/src/hooks/caveman-parse.js" "$plugin_dir/caveman-parse.cjs"
+put "$REPO_DIR/vendor/src/hooks/caveman-config.js" "$plugin_dir/caveman-config.cjs"
+put "$REPO_DIR/vendor/src/hooks/caveman-parse.js" "$plugin_dir/caveman-parse.cjs"
 echo '{"name":"caveman-opencode-plugin","type":"module"}' > "$plugin_dir/package.json"
 
 # 2. Install v2 adapter
-cp "$REPO_DIR/adapter/v2/caveman.ts" "$config_dir/plugins/caveman-v2.ts"
+put "$REPO_DIR/adapter/v2/caveman.ts" "$config_dir/plugins/caveman-v2.ts"
 
 # 3. Install core commands
 for cmd in "$REPO_DIR/vendor/src/plugins/opencode/commands/"*.md; do

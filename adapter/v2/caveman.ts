@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import os from "node:os";
@@ -54,6 +54,8 @@ const opencodeDir = opencodeConfigDir();
 const flagPath = path.join(opencodeDir, ".caveman-active");
 const sessionsDir = path.join(opencodeDir, ".caveman-sessions");
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MODE_LOG_MAX_BYTES = 1024 * 1024;
+const MODE_LOG_KEEP_LINES = 1000;
 
 function sessionFlagPath(sessionID: string): string {
   return path.join(sessionsDir, sessionID);
@@ -82,6 +84,17 @@ function pruneSessions() {
         if (now - statSync(file).mtimeMs > SESSION_TTL_MS) unlinkSync(file);
       } catch {}
     }
+  } catch {}
+}
+
+function trimModeLog() {
+  try {
+    const file = join(opencodeDir, ".caveman-mode-log.jsonl");
+    if (!existsSync(file)) return;
+    if (statSync(file).size <= MODE_LOG_MAX_BYTES) return;
+    const lines = readFileSync(file, "utf8").split("\n");
+    const kept = lines.slice(-MODE_LOG_KEEP_LINES).join("\n");
+    writeFileSync(file, kept);
   } catch {}
 }
 
@@ -187,6 +200,7 @@ function injectSystem(system: SystemEntry[], line: string) {
 async function setup(ctx: any) {
   initFlag();
   pruneSessions();
+  trimModeLog();
 
   try {
     const stream = ctx?.event?.subscribe?.();
