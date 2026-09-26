@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import os from "node:os";
@@ -52,6 +52,38 @@ function opencodeConfigDir(): string {
 
 const opencodeDir = opencodeConfigDir();
 const flagPath = path.join(opencodeDir, ".caveman-active");
+const sessionsDir = path.join(opencodeDir, ".caveman-sessions");
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function sessionFlagPath(sessionID: string): string {
+  return path.join(sessionsDir, sessionID);
+}
+
+function resolveMode(sessionID?: string): string | null {
+  if (sessionID) {
+    try {
+      const mode = readFlag(sessionFlagPath(sessionID));
+      if (mode) return mode;
+    } catch {}
+  }
+  try {
+    return readFlag(flagPath);
+  } catch {
+    return null;
+  }
+}
+
+function pruneSessions() {
+  try {
+    const now = Date.now();
+    for (const name of readdirSync(sessionsDir)) {
+      try {
+        const file = join(sessionsDir, name);
+        if (now - statSync(file).mtimeMs > SESSION_TTL_MS) unlinkSync(file);
+      } catch {}
+    }
+  } catch {}
+}
 
 function removeFlag() {
   try {
@@ -100,15 +132,26 @@ function reinforcementLine(mode: string, alreadyPresent = false): string {
   return ruleset ? banner + "\n\n" + ruleset : banner;
 }
 
-function applyModeChange(change: { action: string; mode?: string } | null | undefined) {
+function applyModeChange(change: { action: string; mode?: string } | null | undefined, sessionID?: string) {
   if (!change) return;
   if (change.action === "clear") {
-    recordModeChange(opencodeDir, null);
+    recordModeChange(opencodeDir, null, sessionID);
+    if (sessionID) {
+      try {
+        unlinkSync(sessionFlagPath(sessionID));
+      } catch {}
+    }
     removeFlag();
     return;
   }
   if (change.action === "set" && change.mode) {
-    recordModeChange(opencodeDir, change.mode);
+    recordModeChange(opencodeDir, change.mode, sessionID);
+    if (sessionID) {
+      try {
+        mkdirSync(sessionsDir, { recursive: true });
+      } catch {}
+      safeWriteFlag(sessionFlagPath(sessionID), change.mode);
+    }
     safeWriteFlag(flagPath, change.mode);
   }
 }
@@ -143,6 +186,7 @@ function injectSystem(system: SystemEntry[], line: string) {
 
 async function setup(ctx: any) {
   initFlag();
+  pruneSessions();
 
   try {
     const stream = ctx?.event?.subscribe?.();
@@ -159,11 +203,13 @@ async function setup(ctx: any) {
 
   await ctx.session.hook("prompt", async (input: any) => {
     const text = typeof input?.prompt?.text === "string" ? input.prompt.text : "";
-    applyModeChange(parseModeChange(text, { getDefaultMode, expandedTpl: true, unwrapQuotes: true }));
+    const sessionID = typeof input?.sessionID === "string" ? input.sessionID : undefined;
+    applyModeChange(parseModeChange(text, { getDefaultMode, expandedTpl: true, unwrapQuotes: true }), sessionID);
   });
 
   await ctx.session.hook("context", async (input: any) => {
-    const active = readFlag(flagPath);
+    const sessionID = typeof input?.sessionID === "string" ? input.sessionID : undefined;
+    const active = resolveMode(sessionID);
     if (active && !INDEPENDENT_MODES.has(active) && Array.isArray(input?.system)) {
       const alreadyPresent = hasCavemanRules(input.system);
       injectSystem(input.system, reinforcementLine(active, alreadyPresent));
@@ -176,4 +222,4 @@ export default {
   setup,
 };
 
-export const __test = { initFlag, applyModeChange, injectSystem, reinforcementLine, flagPath, opencodeDir };
+export const __test = { initFlag, applyModeChange, injectSystem, reinforcementLine, resolveMode, sessionsDir, flagPath, opencodeDir };

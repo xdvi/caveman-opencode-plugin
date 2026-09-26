@@ -87,11 +87,41 @@ describe("v2 adapter", () => {
   test("context hook skips independent modes", async () => {
     const { ctx, hooks } = makeCtx();
     await adapter.default.setup(ctx);
-    await hooks["prompt"]({ prompt: { text: "/caveman-commit fix it" } });
+    await hooks["prompt"]({ sessionID: "s1", prompt: { text: "/caveman-commit fix it" } });
     expect(readFileSync(flag, "utf8").trim()).toBe("commit");
-    const output = { system: [{ type: "text", text: "hello" }] };
+    const output = { sessionID: "s1", system: [{ type: "text", text: "hello" }] };
     await hooks["context"](output);
     expect(output.system).toEqual([{ type: "text", text: "hello" }]);
+  });
+
+  test("explicit session modes stick, untouched sessions follow global", async () => {
+    const { ctx, hooks } = makeCtx();
+    await adapter.default.setup(ctx);
+    await hooks["prompt"]({ sessionID: "a", prompt: { text: "/caveman ultra" } });
+    const outA = { sessionID: "a", system: [] as unknown[] };
+    const outB = { sessionID: "b", system: [] as unknown[] };
+    await hooks["context"](outA);
+    await hooks["context"](outB);
+    expect(JSON.stringify(outA.system)).toContain("CAVEMAN MODE ACTIVE (ultra)");
+    expect(JSON.stringify(outB.system)).toContain("CAVEMAN MODE ACTIVE (ultra)");
+    await hooks["prompt"]({ sessionID: "b", prompt: { text: "/caveman lite" } });
+    const outA2 = { sessionID: "a", system: [] as unknown[] };
+    const outB2 = { sessionID: "b", system: [] as unknown[] };
+    await hooks["context"](outA2);
+    await hooks["context"](outB2);
+    expect(JSON.stringify(outA2.system)).toContain("CAVEMAN MODE ACTIVE (ultra)");
+    expect(JSON.stringify(outB2.system)).toContain("CAVEMAN MODE ACTIVE (lite)");
+  });
+
+  test("clear on one session leaves the other alone", async () => {
+    const { ctx, hooks } = makeCtx();
+    await adapter.default.setup(ctx);
+    await hooks["prompt"]({ sessionID: "a", prompt: { text: "/caveman ultra" } });
+    await hooks["prompt"]({ sessionID: "b", prompt: { text: "/caveman lite" } });
+    await hooks["prompt"]({ sessionID: "a", prompt: { text: "stop caveman" } });
+    const outB = { sessionID: "b", system: [] as unknown[] };
+    await hooks["context"](outB);
+    expect(JSON.stringify(outB.system)).toContain("CAVEMAN MODE ACTIVE (lite)");
   });
 
   test("resolves vendored helpers without override", async () => {
