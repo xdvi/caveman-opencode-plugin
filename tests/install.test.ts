@@ -37,8 +37,8 @@ describe("surgical v2 installer", () => {
       expect(files.some((f) => f.startsWith("cavecrew"))).toBe(false);
     }
 
-    // 4. Must NOT install python compress benchmark scripts
-    const compressSkills = join(configDir, "skills", "caveman-compress");
-    expect(existsSync(compressSkills)).toBe(false);
+    // 4. caveman-compress ships as a command, so its skill must be present
+    expect(existsSync(join(configDir, "skills", "caveman-compress", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(configDir, "skills", "caveman-compress", "scripts", "__main__.py"))).toBe(true);
   });
 });

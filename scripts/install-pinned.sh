@@ -42,8 +42,10 @@ for cmd in "$REPO_DIR/vendor/src/plugins/opencode/commands/"*.md; do
 done
 
 # 4. Install only core opencode skills (caveman, caveman-commit, caveman-review, caveman-help, caveman-stats)
-# Skip cavecrew (Claude subagent dispatcher) and caveman-compress (Python benchmark suite)
-for skill in caveman caveman-commit caveman-review caveman-help caveman-stats; do
+# plus caveman-compress: /caveman-compress.md ships as a command, so its skill
+# (scripts included, the skill shells out to them) must be present.
+# Skip cavecrew (Claude subagent dispatcher, no opencode command references it).
+for skill in caveman caveman-commit caveman-review caveman-help caveman-stats caveman-compress; do
   if [ -d "$REPO_DIR/vendor/skills/$skill" ]; then
     mkdir -p "$skills_dir/$skill"
     cp -R "$REPO_DIR/vendor/skills/$skill/." "$skills_dir/$skill/"

@@ -124,6 +124,19 @@ sh scripts/sync-upstream.sh <commit-sha>
 
 ---
 
+## Surgical scope contract
+
+`install-pinned.sh` deliberately installs a subset of the official payload:
+
+- In: v2 adapter, CJS helpers, 6 commands, skills
+  (`caveman`, `caveman-commit`, `caveman-review`, `caveman-help`,
+  `caveman-stats`, `caveman-compress` with scripts), Tier-3 `AGENTS.md` fence.
+- Out: `cavecrew` agents and skill (Claude subagent dispatcher, no
+  opencode command references them).
+- The Tier-3 fence is shorter than upstream's full ruleset; the per-turn
+  injection still loads the full filtered ruleset from `SKILL.md` at
+  runtime, so behavior is unchanged.
+
 ## License & Attribution
 
 All code inside `vendor/` is licensed under the MIT License by Julius Brussee. See [NOTICE.md](NOTICE.md) for details.

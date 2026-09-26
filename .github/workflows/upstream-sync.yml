@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
   sync:
@@ -31,17 +32,29 @@ jobs:
           fi
 
       - name: sync vendor
+        id: sync
         if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
         run: sh scripts/sync-upstream.sh "${{ steps.head.outputs.sha }}"
+
+      - name: file blocker issue
+        if: steps.diff.outputs.changed == 'true' && steps.sync.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "upstream sync blocked at ${{ steps.head.outputs.sha }}" \
+            --label upstream-sync \
+            --body "sync-upstream.sh failed against upstream \`${{ steps.head.outputs.sha }}\`. Likely causes: network/tarball error or upstream layout change (new required paths). Check the failed run logs, adjust TRACKED paths, re-run."
 
       - name: contract tests
         id: tests
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && steps.sync.outcome == 'success'
         continue-on-error: true
         run: bun test
 
       - name: open sync pr
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && steps.sync.outcome == 'success'
         uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/upstream-sync-${{ steps.head.outputs.sha }}
