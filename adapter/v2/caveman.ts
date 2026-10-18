@@ -50,6 +50,10 @@ const { parseModeChange, INDEPENDENT_MODES } = loadHelper("caveman-parse");
 // hook run, and never reach a flag file — a crashed or cancelled action turn
 // cannot leave a corrupted stored mode behind.
 const pendingActions = new Map<string, string>();
+// Long-lived TUI servers never stop creating sessions, so the slot map is
+// bounded: the oldest entry is evicted past the limit, and session.deleted
+// clears entries explicitly.
+const PENDING_ACTIONS_LIMIT = 256;
 
 function takePendingAction(sessionID?: string): string | null {
   const key = sessionID ?? "";
@@ -194,6 +198,11 @@ function applyModeChange(change: { action: string; mode?: string } | null | unde
       // Journal the action for stats, but keep it out of every flag file.
       recordModeChange(opencodeDir, change.mode, sessionID);
       pendingActions.set(sessionID ?? "", change.mode);
+      while (pendingActions.size > PENDING_ACTIONS_LIMIT) {
+        const oldest = pendingActions.keys().next().value;
+        if (oldest === undefined) break;
+        pendingActions.delete(oldest);
+      }
       return;
     }
     recordModeChange(opencodeDir, change.mode, sessionID);
@@ -237,6 +246,18 @@ function injectSystem(system: SystemEntry[], line: string) {
       return;
     }
   }
+  // Growing the entry count can surface as extra system blocks on strict
+  // backends, so the reinforcement joins the last text entry when one exists;
+  // it only pushes a new entry when the array is empty.
+  const last = system[system.length - 1];
+  if (typeof last === "string") {
+    system[system.length - 1] = last + "\n\n" + line;
+    return;
+  }
+  if (last && typeof last === "object" && typeof last.text === "string") {
+    last.text = last.text + "\n\n" + line;
+    return;
+  }
   system.push({ type: "text", text: line });
 }
 
@@ -251,7 +272,18 @@ async function setup(ctx: any) {
       void (async () => {
         try {
           for await (const ev of stream) {
-            if (ev && ev.type === "session.created") initFlag();
+            if (!ev) continue;
+            if (ev.type === "session.created") initFlag();
+            if (ev.type === "session.deleted") {
+              const id =
+                ev.sessionID ?? ev.properties?.sessionID ?? ev.properties?.info?.id ?? ev.data?.sessionID;
+              if (typeof id === "string") {
+                pendingActions.delete(id);
+                try {
+                  unlinkSync(sessionFlagPath(id));
+                } catch {}
+              }
+            }
           }
         } catch {}
       })();
@@ -292,4 +324,4 @@ export default {
   setup,
 };
 
-export const __test = { initFlag, applyModeChange, injectSystem, reinforcementLine, resolveMode, writeModeFlag, takePendingAction, sessionsDir, flagPath, opencodeDir };
+export const __test = { initFlag, applyModeChange, injectSystem, reinforcementLine, resolveMode, writeModeFlag, takePendingAction, pendingActions, pendingActionLimit: PENDING_ACTIONS_LIMIT, sessionsDir, flagPath, opencodeDir };

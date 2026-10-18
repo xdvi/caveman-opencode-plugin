@@ -39,6 +39,8 @@
     "src/plugins/opencode/commands/caveman-review.md": "41c6c0e560beeb8750e2abb171a2b78150b897902a7b608262caa381e6bc6bcf",
     "src/plugins/opencode/commands/caveman-stats.md": "58882a46a5ded1fa39f38ad8f20b6d74b5a895d833f351e2f6a7c630f233f951",
     "src/plugins/opencode/commands/caveman.md": "ec3e95320e6f0fba2869ddacf4ff0389fe02cdda4dc351624bbb9166fe43f897",
+    "src/plugins/opencode/commands/megacave.md": "17fc615a3b6f0a0dc09bffd6a42d25f9c83edb0fa814575c5cc9205855722141",
+    "src/plugins/opencode/commands/ultracave.md": "9382c6efb603c40a614497006a4acb07d6f7a27a073ae497cb3d13cb9f7d5140",
     "src/plugins/opencode/package.json": "b603811ba72eb71581db5b02045fb5f8903e3c46dcf7b40f36eeb81fbba23274",
     "src/plugins/opencode/plugin.js": "49ddcd098507a8ae6850290e5e1c3ec0e51646e9ddf0cb98ae550f82a7568705"
   }

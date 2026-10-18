@@ -15,6 +15,8 @@ src/plugins/opencode/commands/caveman-review.md
 src/plugins/opencode/commands/caveman-compress.md
 src/plugins/opencode/commands/caveman-stats.md
 src/plugins/opencode/commands/caveman-help.md
+src/plugins/opencode/commands/ultracave.md
+src/plugins/opencode/commands/megacave.md
 src/hooks/caveman-config.js
 src/hooks/caveman-parse.js
 agents/cavecrew-investigator.md
@@ -57,6 +59,34 @@ done
 if [ -n "$missing" ]; then
   echo "ERROR: upstream layout changed, missing:$missing" >&2
   exit 1
+fi
+
+# The helper API is what the adapter and the contract tests are written
+# against: verify the fetched tree still exposes it BEFORE vendor/ is
+# rewritten, so a signature break fails the sync early with a clear message.
+JS=""
+if command -v node >/dev/null 2>&1; then JS=node
+elif command -v bun >/dev/null 2>&1; then JS=bun
+fi
+if [ -n "$JS" ]; then
+  PARSE_FILE="$src/src/hooks/caveman-parse.js" CONFIG_FILE="$src/src/hooks/caveman-config.js" "$JS" -e '
+    const parse = require(process.env.PARSE_FILE);
+    const config = require(process.env.CONFIG_FILE);
+    const missing = [];
+    for (const key of ["parseModeChange", "INDEPENDENT_MODES"]) {
+      if (!(key in parse)) missing.push("parse." + key);
+    }
+    for (const key of ["getDefaultMode", "canonicalMode", "safeWriteFlag", "readFlag", "recordModeChange", "loadRuleset", "thesisLine"]) {
+      if (!(key in config)) missing.push("config." + key);
+    }
+    if (missing.length) {
+      console.error("ERROR: upstream helper API drift, missing: " + missing.join(", "));
+      process.exit(1);
+    }
+    console.log("helper API ok");
+  ' || exit 1
+else
+  echo "WARN: no node or bun on PATH, skipping helper API check" >&2
 fi
 
 rm -rf "$VENDOR_DIR"

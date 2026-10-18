@@ -172,6 +172,39 @@ describe("v2 adapter", () => {
     expect(existsSync(join(adapter.__test.sessionsDir, "old"))).toBe(false);
   });
 
+  test("context injection keeps the system entry count stable", async () => {
+    const { ctx, hooks } = makeCtx();
+    await adapter.default.setup(ctx);
+    const output = { system: ["base prompt"] as unknown[] };
+    await hooks["context"](output);
+    expect(output.system.length).toBe(1);
+    expect(String(output.system[0])).toContain("CAVEMAN MODE ACTIVE (ultracave)");
+  });
+
+  test("pending actions stay bounded on long-lived servers", () => {
+    adapter.__test.pendingActions.clear();
+    const limit = adapter.__test.pendingActionLimit;
+    for (let i = 0; i < limit + 50; i++) {
+      adapter.__test.applyModeChange({ action: "set", mode: "commit" }, `bounded-${i}`);
+    }
+    expect(adapter.__test.pendingActions.size).toBe(limit);
+    expect(adapter.__test.pendingActions.has("bounded-0")).toBe(false);
+    expect(adapter.__test.pendingActions.has(`bounded-${limit + 49}`)).toBe(true);
+    adapter.__test.pendingActions.clear();
+  });
+
+  test("session.deleted drops the pending action", async () => {
+    adapter.__test.pendingActions.clear();
+    adapter.__test.applyModeChange({ action: "set", mode: "review" }, "dead");
+    expect(adapter.__test.pendingActions.has("dead")).toBe(true);
+    const { ctx } = makeCtx([{ type: "session.deleted", properties: { sessionID: "dead" } }]);
+    await adapter.default.setup(ctx);
+    for (let i = 0; i < 100 && adapter.__test.pendingActions.has("dead"); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(adapter.__test.pendingActions.has("dead")).toBe(false);
+  });
+
   test("manual default activates caveman on setup", async () => {
     process.env.CAVEMAN_DEFAULT_MODE = "manual";
     try {

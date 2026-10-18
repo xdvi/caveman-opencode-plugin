@@ -70,6 +70,8 @@ Rules:
 Switch mode: /caveman | /ultracave | /megacave
 Stop: "stop caveman" or "normal mode"
 
+Precedence: session state outranks this block. If caveman is off for the session, or the user asks for normal mode, write normal — subagents included.
+
 Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
 
 Boundaries: code/commits/PRs written normal.

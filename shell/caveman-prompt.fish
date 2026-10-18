@@ -5,9 +5,10 @@ function caveman_prompt_segment
     set dir "$XDG_CONFIG_HOME/opencode"
   end
   set -l flag "$dir/.caveman-active"
-  if test -f "$flag"
-    set -l mode (cat "$flag" 2>/dev/null)
-    if test -n "$mode"
+  # Symmetric with caveman-config.js readFlag: never follow symlinks.
+  if test -f "$flag"; and not test -L "$flag"
+    set -l mode (head -n 1 "$flag" 2>/dev/null | string trim)
+    if test -n "$mode"; and string match -qr '^[a-z-]+$' -- "$mode"
       printf 'caveman:%s' "$mode"
     end
   end

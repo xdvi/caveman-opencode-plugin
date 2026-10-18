@@ -18,6 +18,7 @@ process.env.CAVEMAN_DEFAULT_MODE = "ultracave";
 
 const require = createRequire(import.meta.url);
 const testConfig = require(join(VENDOR, "src/hooks/caveman-config.js"));
+const testParse = require(join(VENDOR, "src/hooks/caveman-parse.js"));
 const { CavemanPlugin } = await import(join(PLUGIN, "plugin.js"));
 
 describe("pin", () => {
@@ -38,6 +39,8 @@ describe("pin", () => {
 describe("payload", () => {
   const COMMANDS = [
     "caveman",
+    "ultracave",
+    "megacave",
     "caveman-commit",
     "caveman-review",
     "caveman-compress",
@@ -72,6 +75,53 @@ describe("payload", () => {
     for (const a of ["cavecrew-investigator.md", "cavecrew-builder.md", "cavecrew-reviewer.md"]) {
       expect(existsSync(join(VENDOR, "agents", a))).toBe(true);
     }
+  });
+
+  test("vendored compress skill keeps the atomic utf-8 write", () => {
+    const source = readFileSync(join(VENDOR, "skills/caveman-compress/scripts/compress.py"), "utf8");
+    expect(source).toContain("os.replace(");
+    expect(source).toContain('encoding="utf-8"');
+  });
+});
+
+describe("helper API surface", () => {
+  test("parse helper exposes the mode API", () => {
+    expect(typeof testParse.parseModeChange).toBe("function");
+    expect(testParse.INDEPENDENT_MODES instanceof Set).toBe(true);
+    for (const action of ["commit", "review", "compress"]) {
+      expect(testParse.INDEPENDENT_MODES.has(action)).toBe(true);
+    }
+  });
+
+  test("config helper exposes the adapter API", () => {
+    for (const key of ["getDefaultMode", "canonicalMode", "safeWriteFlag", "readFlag", "recordModeChange", "loadRuleset", "thesisLine"]) {
+      expect(typeof testConfig[key]).toBe("function");
+    }
+  });
+});
+
+describe("command templates", () => {
+  const body = (name: string) =>
+    readFileSync(join(PLUGIN, "commands", name), "utf8").replace(/^---[\s\S]*?---\s*/, "");
+  const opts = { getDefaultMode: () => "caveman", expandedTpl: true, unwrapQuotes: true };
+
+  test("expanded templates keep resolving to their modes", () => {
+    const expectations: Array<[string, unknown]> = [
+      [body("caveman.md").replace("$ARGUMENTS", ""), { action: "set", mode: "caveman" }],
+      [body("caveman.md").replace("$ARGUMENTS", "ultracave"), { action: "set", mode: "ultracave" }],
+      [body("caveman.md").replace("$ARGUMENTS", "off"), { action: "clear" }],
+      [body("caveman.md").replace("$ARGUMENTS", "status"), { action: "status" }],
+      [body("caveman-commit.md"), { action: "set", mode: "commit" }],
+      [body("caveman-review.md"), { action: "set", mode: "review" }],
+      [body("caveman-compress.md"), { action: "set", mode: "compress" }],
+      [body("ultracave.md"), { action: "set", mode: "ultracave" }],
+      [body("megacave.md"), { action: "set", mode: "megacave" }],
+    ];
+    for (const [text, expected] of expectations) {
+      expect(testParse.parseModeChange(text, opts)).toEqual(expected);
+    }
+    expect(testParse.parseModeChange(body("caveman-help.md"), opts)).toBeNull();
+    expect(testParse.parseModeChange(body("caveman-stats.md"), opts)).toBeNull();
   });
 });
 

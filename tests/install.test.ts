@@ -33,20 +33,27 @@ describe("surgical v2 installer", () => {
     expect(existsSync(join(configDir, "skills", "ultracave", "SKILL.md"))).toBe(true);
     expect(existsSync(join(configDir, "skills", "megacave", "SKILL.md"))).toBe(true);
 
-    // 3. Must NOT dump Claude/Gemini subagents into agents/
+    // 3. Must NOT dump Claude/Gemini subagents into agents/, and any agent
+    // file that does land there must use opencode-valid frontmatter (no YAML
+    // tools arrays).
     const agentsDir = join(configDir, "agents");
     if (existsSync(agentsDir)) {
       const files = readdirSync(agentsDir);
       expect(files.some((f) => f.startsWith("cavecrew"))).toBe(false);
+      for (const f of files.filter((name) => name.endsWith(".md"))) {
+        expect(readFileSync(join(agentsDir, f), "utf8")).not.toMatch(/^tools:\s*\[/m);
+      }
     }
 
     // 4. caveman-compress ships as a command, so its skill must be present
     expect(existsSync(join(configDir, "skills", "caveman-compress", "SKILL.md"))).toBe(true);
     expect(existsSync(join(configDir, "skills", "caveman-compress", "scripts", "__main__.py"))).toBe(true);
 
-    // 5. Tier-3 AGENTS.md fence names the current mode commands
+    // 5. Tier-3 AGENTS.md fence names the current mode commands and the
+    // session-state precedence that covers subagents.
     const agentsMd = readFileSync(join(configDir, "AGENTS.md"), "utf8");
     expect(agentsMd).toContain("/ultracave");
     expect(agentsMd).toContain("/megacave");
+    expect(agentsMd).toContain("subagents included");
   });
 });

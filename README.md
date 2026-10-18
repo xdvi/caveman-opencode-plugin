@@ -128,7 +128,7 @@ sh scripts/sync-upstream.sh <commit-sha>
 
 `install-pinned.sh` deliberately installs a subset of the official payload:
 
-- In: v2 adapter, CJS helpers, 6 commands, skills
+- In: v2 adapter, CJS helpers, 8 commands, skills
   (`caveman`, `ultracave`, `megacave`, `caveman-commit`, `caveman-review`,
   `caveman-help`, `caveman-stats`, `caveman-compress` with scripts), Tier-3
   `AGENTS.md` fence.
