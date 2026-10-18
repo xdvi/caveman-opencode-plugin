@@ -35,7 +35,8 @@ This repository provides:
 ├── tests/
 │   ├── contract.test.ts       # Byte-for-byte pin validation and vendor behavior tests
 │   ├── v2contract.test.ts     # OpenCode v2 mock context & deduplication tests
-│   ├── installed.test.ts      # Installed payload matches vendor bytes
+│   ├── installed.test.ts      # Installer output matches vendor bytes
+│   ├── shell.test.ts          # Prompt segment hardening (bash + fish)
 │   └── install.test.ts        # Surgical installer integration tests
 ├── vendor/                    # Verbatim payload from upstream pinned SHA
 ├── UPSTREAM_PIN.json          # Pinned commit SHA and per-file SHA256 hashes

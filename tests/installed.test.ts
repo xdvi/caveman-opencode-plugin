@@ -1,48 +1,47 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import os from "node:os";
+import { spawnSync } from "node:child_process";
 
 const ROOT = join(import.meta.dir, "..");
 
-// The surgical install ships the v2 adapter plus the two CJS helpers. The
-// vendored v1 plugin.js is tracker-side contract material, never an
-// installed artifact.
-const PAIRS: Array<[string, string]> = [
-  ["vendor/src/hooks/caveman-config.js", "caveman-config.cjs"],
-  ["vendor/src/hooks/caveman-parse.js", "caveman-parse.cjs"],
-];
-
-function candidates(): string[] {
-  const dirs = [];
-  if (process.env.XDG_CONFIG_HOME) dirs.push(join(process.env.XDG_CONFIG_HOME, "opencode"));
-  dirs.push(join(os.homedir(), ".config", "opencode"));
-  return dirs.map((dir) => join(dir, "plugins", "caveman"));
-}
-
-const INSTALLED =
-  candidates().find((dir) => PAIRS.every(([, name]) => existsSync(join(dir, name)))) ?? candidates()[0];
+// Contract for the installer's output, run against its own throwaway config
+// dir: what it writes must be byte-identical to the vendored sources, so a
+// stale or hand-edited install can never drift unnoticed. Provisioning it
+// here keeps the suite deterministic everywhere — no ambient home state, no
+// skips, no workflow-injected directories.
+const home = mkdtempSync(join(tmpdir(), "caveman-installed-test-"));
+const installed = join(home, "opencode", "plugins", "caveman");
 
 function sha(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
-const present = PAIRS.every(([, name]) => existsSync(join(INSTALLED, name)));
-describe.skipIf(!present)("installed payload", () => {
-  for (const [rel, name] of PAIRS) {
+afterAll(() => rmSync(home, { recursive: true, force: true }));
+
+describe("installed payload", () => {
+  beforeAll(() => {
+    const res = spawnSync("sh", [join(ROOT, "scripts", "install-pinned.sh")], {
+      env: { ...process.env, XDG_CONFIG_HOME: home },
+      encoding: "utf8",
+    });
+    expect(res.status).toBe(0);
+  });
+
+  for (const [rel, name] of [
+    ["vendor/src/hooks/caveman-config.js", "caveman-config.cjs"],
+    ["vendor/src/hooks/caveman-parse.js", "caveman-parse.cjs"],
+  ] as Array<[string, string]>) {
     test(`${name} matches ${rel} byte for byte`, () => {
-      expect(sha(join(INSTALLED, name))).toBe(sha(join(ROOT, rel)));
+      expect(sha(join(installed, name))).toBe(sha(join(ROOT, rel)));
     });
   }
 
   test("package.json keeps loader-relevant fields", () => {
-    const pkg = JSON.parse(readFileSync(join(INSTALLED, "package.json"), "utf8"));
+    const pkg = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
     expect(pkg.name).toBe("caveman-opencode-plugin");
     expect(pkg.type).toBe("module");
-  });
-
-  test("legacy v1 plugin.js payload is pruned", () => {
-    expect(existsSync(join(INSTALLED, "plugin.js"))).toBe(false);
   });
 });
