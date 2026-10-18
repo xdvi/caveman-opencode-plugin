@@ -45,6 +45,19 @@ const recordModeChange: (dir: string, mode: string | null) => void =
   config.recordModeChange || (() => {});
 const { parseModeChange, INDEPENDENT_MODES } = loadHelper("caveman-parse");
 
+// Actions (commit, review, compress) are request-scoped intents, not modes.
+// They sit in a per-session in-memory slot, are taken by exactly one context
+// hook run, and never reach a flag file — a crashed or cancelled action turn
+// cannot leave a corrupted stored mode behind.
+const pendingActions = new Map<string, string>();
+
+function takePendingAction(sessionID?: string): string | null {
+  const key = sessionID ?? "";
+  const action = pendingActions.get(key) ?? null;
+  if (action) pendingActions.delete(key);
+  return action;
+}
+
 function opencodeConfigDir(): string {
   if (process.env.XDG_CONFIG_HOME) return path.join(process.env.XDG_CONFIG_HOME, "opencode");
   return path.join(os.homedir(), ".config", "opencode");
@@ -65,11 +78,19 @@ function resolveMode(sessionID?: string): string | null {
   if (sessionID) {
     try {
       const mode = readFlag(sessionFlagPath(sessionID));
-      if (mode) return mode;
+      if (mode && INDEPENDENT_MODES.has(mode)) {
+        // Legacy state: an action id stored as a mode is pruned on sight.
+        try {
+          unlinkSync(sessionFlagPath(sessionID));
+        } catch {}
+      } else if (mode) {
+        return mode;
+      }
     } catch {}
   }
   try {
-    return readFlag(flagPath);
+    const mode = readFlag(flagPath);
+    return mode && INDEPENDENT_MODES.has(mode) ? null : mode;
   } catch {
     return null;
   }
@@ -106,6 +127,15 @@ function removeFlag() {
       console.error(`caveman: failed to remove flag ${flagPath}: ${error?.message}`);
     }
   }
+}
+
+// The only writer for stored modes. Actions are request-scoped intents; one
+// reaching a flag file would corrupt the base mode, so it is refused here.
+function writeModeFlag(target: string, mode: string) {
+  if (INDEPENDENT_MODES.has(mode)) {
+    throw new Error(`caveman: "${mode}" is an action, not a mode; refusing to write ${target}`);
+  }
+  safeWriteFlag(target, mode);
 }
 
 function reinforcementBanner(mode: string): string {
@@ -160,14 +190,20 @@ function applyModeChange(change: { action: string; mode?: string } | null | unde
     return;
   }
   if (change.action === "set" && change.mode) {
+    if (INDEPENDENT_MODES.has(change.mode)) {
+      // Journal the action for stats, but keep it out of every flag file.
+      recordModeChange(opencodeDir, change.mode, sessionID);
+      pendingActions.set(sessionID ?? "", change.mode);
+      return;
+    }
     recordModeChange(opencodeDir, change.mode, sessionID);
     if (sessionID) {
       try {
         mkdirSync(sessionsDir, { recursive: true });
       } catch {}
-      safeWriteFlag(sessionFlagPath(sessionID), change.mode);
+      writeModeFlag(sessionFlagPath(sessionID), change.mode);
     }
-    safeWriteFlag(flagPath, change.mode);
+    writeModeFlag(flagPath, change.mode);
   }
 }
 
@@ -175,14 +211,16 @@ function initFlag() {
   const configured = getDefaultMode();
   // OpenCode ships static AGENTS.md activation, so a cleared flag alone
   // cannot promise normal prose: manual startup keeps the caveman default.
-  const mode = configured === "manual" ? "caveman" : configured;
+  // An action id is not a storable mode, so it keeps that same default
+  // rather than violating the mode/action split.
+  const mode = configured === "manual" || INDEPENDENT_MODES.has(configured) ? "caveman" : configured;
   if (mode === "off") {
     recordModeChange(opencodeDir, null);
     removeFlag();
     return;
   }
   recordModeChange(opencodeDir, mode);
-  safeWriteFlag(flagPath, mode);
+  writeModeFlag(flagPath, mode);
 }
 
 type SystemEntry = string | { type: string; text: string; [key: string]: unknown };
@@ -238,6 +276,9 @@ async function setup(ctx: any) {
 
   await ctx.session.hook("context", async (input: any) => {
     const sessionID = typeof input?.sessionID === "string" ? input.sessionID : undefined;
+    // An action turn gets no injection: commit/review/compress output is
+    // written normal, and the base mode returns on the very next request.
+    if (takePendingAction(sessionID)) return;
     const active = resolveMode(sessionID);
     if (active && !INDEPENDENT_MODES.has(active) && Array.isArray(input?.system)) {
       const alreadyPresent = hasCavemanRules(input.system);
@@ -251,4 +292,4 @@ export default {
   setup,
 };
 
-export const __test = { initFlag, applyModeChange, injectSystem, reinforcementLine, resolveMode, sessionsDir, flagPath, opencodeDir };
+export const __test = { initFlag, applyModeChange, injectSystem, reinforcementLine, resolveMode, writeModeFlag, takePendingAction, sessionsDir, flagPath, opencodeDir };

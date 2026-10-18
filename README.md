@@ -15,6 +15,7 @@ This repository provides:
 
 - **OpenCode v2 Compatibility**: Full support for OpenCode v2+ using session-level Effect hooks.
 - **Smart Token Deduplication**: If caveman rules are already part of the system prompt (e.g., via `AGENTS.md`), the adapter skips re-injecting 5KB+ of redundant rules and outputs only an active mode banner.
+- **Mode/Action Split**: `/caveman-commit`, `/caveman-review` and `/caveman-compress` are request-scoped actions — taken atomically for exactly one turn and never written to stored mode state.
 - **Surgical Installation**: Copies only required CJS runtime helpers (`caveman-config.cjs`, `caveman-parse.cjs`) without dropping Claude/Gemini subagents (`cavecrew-*`) into `~/.config/ai/agents/` or bundling Python benchmark scripts.
 - **Contract Tests**: Functional test suite verifying vendor integrity, dynamic flag switching (`/caveman <mode>`), natural language stop commands, and v2 context transformations.
 
