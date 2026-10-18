@@ -41,11 +41,12 @@ for cmd in "$REPO_DIR/vendor/src/plugins/opencode/commands/"*.md; do
   [ -f "$cmd" ] && cp "$cmd" "$commands_dir/"
 done
 
-# 4. Install only core opencode skills (caveman, caveman-commit, caveman-review, caveman-help, caveman-stats)
-# plus caveman-compress: /caveman-compress.md ships as a command, so its skill
-# (scripts included, the skill shells out to them) must be present.
+# 4. Install the mode skills (caveman, ultracave, megacave) plus the command
+# skills (caveman-commit, caveman-review, caveman-help, caveman-stats).
+# caveman-compress ships as a command too, so its skill (scripts included,
+# the skill shells out to them) must be present.
 # Skip cavecrew (Claude subagent dispatcher, no opencode command references it).
-for skill in caveman caveman-commit caveman-review caveman-help caveman-stats caveman-compress; do
+for skill in caveman ultracave megacave caveman-commit caveman-review caveman-help caveman-stats caveman-compress; do
   if [ -d "$REPO_DIR/vendor/skills/$skill" ]; then
     mkdir -p "$skills_dir/$skill"
     cp -R "$REPO_DIR/vendor/skills/$skill/." "$skills_dir/$skill/"
@@ -66,7 +67,7 @@ Rules:
 - Not: "Sure! I'd be happy to help you with that."
 - Yes: "Bug in auth middleware. Fix:"
 
-Switch level: /caveman lite|full|ultra|wenyan-lite|wenyan-full|wenyan-ultra
+Switch mode: /caveman | /ultracave | /megacave
 Stop: "stop caveman" or "normal mode"
 
 Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
@@ -75,5 +76,9 @@ Boundaries: code/commits/PRs written normal.
 <!-- caveman-end -->
 EOF
 fi
+
+# 6. Prune the legacy v1 plugin payload if present: this install ships the
+# v2 adapter only, and a stale plugin.js next to it is drift bait.
+rm -f "$plugin_dir/plugin.js"
 
 echo "Installed clean caveman v2 plugin to $config_dir/plugins/caveman-v2.ts"

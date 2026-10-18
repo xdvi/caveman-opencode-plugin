@@ -119,11 +119,11 @@ function escapeRegExp(text: string): string {
 const [bannerPrefix, bannerSuffix] = reinforcementBanner("\0").split("\0");
 const staleBlock = new RegExp(escapeRegExp(bannerPrefix) + "[a-z-]+" + escapeRegExp(bannerSuffix) + "[\\s\\S]*$");
 
-function loadFilteredRuleset(mode: string): string | null {
-  if (typeof config.loadFilteredRuleset !== "function") return null;
+function loadRuleset(mode: string): string | null {
+  if (typeof config.loadRuleset !== "function") return null;
   for (const base of [helperDir(), join(helperDir(), "..")]) {
-    const ruleset = config.loadFilteredRuleset(mode, base);
-    if (ruleset) return ruleset;
+    const ruleset = config.loadRuleset(mode, base);
+    if (ruleset) return ruleset.trimEnd();
   }
   return null;
 }
@@ -141,8 +141,10 @@ function hasCavemanRules(system: SystemEntry[]): boolean {
 function reinforcementLine(mode: string, alreadyPresent = false): string {
   const banner = reinforcementBanner(mode);
   if (alreadyPresent) return banner;
-  const ruleset = loadFilteredRuleset(mode);
-  return ruleset ? banner + "\n\n" + ruleset : banner;
+  const ruleset = loadRuleset(mode);
+  if (ruleset) return banner + "\n\n" + ruleset;
+  const thesis = typeof config.thesisLine === "function" ? config.thesisLine(mode) : null;
+  return thesis ? banner + "\n\n" + thesis : banner;
 }
 
 function applyModeChange(change: { action: string; mode?: string } | null | undefined, sessionID?: string) {
@@ -170,7 +172,10 @@ function applyModeChange(change: { action: string; mode?: string } | null | unde
 }
 
 function initFlag() {
-  const mode = getDefaultMode();
+  const configured = getDefaultMode();
+  // OpenCode ships static AGENTS.md activation, so a cleared flag alone
+  // cannot promise normal prose: manual startup keeps the caveman default.
+  const mode = configured === "manual" ? "caveman" : configured;
   if (mode === "off") {
     recordModeChange(opencodeDir, null);
     removeFlag();
@@ -218,7 +223,17 @@ async function setup(ctx: any) {
   await ctx.session.hook("prompt", async (input: any) => {
     const text = typeof input?.prompt?.text === "string" ? input.prompt.text : "";
     const sessionID = typeof input?.sessionID === "string" ? input.sessionID : undefined;
-    applyModeChange(parseModeChange(text, { getDefaultMode, expandedTpl: true, unwrapQuotes: true }), sessionID);
+    const change = parseModeChange(text, { getDefaultMode, expandedTpl: true, unwrapQuotes: true });
+    if (change && change.action === "status") {
+      // Observational: report the active mode in place of the command without
+      // touching any flag.
+      if (input?.prompt && typeof input.prompt.text === "string") {
+        input.prompt.text =
+          "Report this status verbatim without changing mode: Caveman mode: " + (resolveMode(sessionID) || "off");
+      }
+      return;
+    }
+    applyModeChange(change, sessionID);
   });
 
   await ctx.session.hook("context", async (input: any) => {

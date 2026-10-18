@@ -14,7 +14,7 @@ const pin = JSON.parse(readFileSync(join(ROOT, "UPSTREAM_PIN.json"), "utf8"));
 // env before the plugin import: it resolves its flag path at module load.
 const TEST_HOME = mkdtempSync(join(tmpdir(), "caveman-plugin-test-"));
 process.env.XDG_CONFIG_HOME = TEST_HOME;
-process.env.CAVEMAN_DEFAULT_MODE = "full";
+process.env.CAVEMAN_DEFAULT_MODE = "ultracave";
 
 const require = createRequire(import.meta.url);
 const testConfig = require(join(VENDOR, "src/hooks/caveman-config.js"));
@@ -66,7 +66,7 @@ describe("payload", () => {
   });
 
   test("skills and agents are vendored", () => {
-    for (const s of ["caveman", "caveman-commit", "caveman-review", "caveman-help", "caveman-stats", "caveman-compress", "cavecrew"]) {
+    for (const s of ["caveman", "ultracave", "megacave", "caveman-commit", "caveman-review", "caveman-help", "caveman-stats", "caveman-compress", "cavecrew"]) {
       expect(existsSync(join(VENDOR, "skills", s, "SKILL.md"))).toBe(true);
     }
     for (const a of ["cavecrew-investigator.md", "cavecrew-builder.md", "cavecrew-reviewer.md"]) {
@@ -92,16 +92,16 @@ describe("plugin behavior", () => {
     }
   });
 
-  test("session start writes the default mode", async () => {
-    expect(config.readFlag(flag)).toBe("full");
+  test("session start writes the configured default mode", async () => {
+    expect(config.readFlag(flag)).toBe("ultracave");
     rmSync(flag, { force: true });
     await hooks["event"]({ event: { type: "session.created" } });
-    expect(config.readFlag(flag)).toBe("full");
+    expect(config.readFlag(flag)).toBe("ultracave");
   });
 
-  test("/caveman ultra switches the flag", async () => {
-    await hooks["chat.message"](undefined, msg("/caveman ultra"));
-    expect(config.readFlag(flag)).toBe("ultra");
+  test("mode command switches the flag", async () => {
+    await hooks["chat.message"](undefined, msg("/megacave"));
+    expect(config.readFlag(flag)).toBe("megacave");
   });
 
   test("independent command records its own mode", async () => {
@@ -128,13 +128,21 @@ describe("plugin behavior", () => {
   });
 
   test("transform injects one banner while active", async () => {
-    await hooks["chat.message"](undefined, msg("/caveman ultra"));
+    await hooks["chat.message"](undefined, msg("/megacave"));
     const output = { system: ["hello"] };
     const transform = hooks["experimental.chat.system.transform"];
     await transform(undefined, output);
-    expect(output.system.join("\n")).toContain("CAVEMAN MODE ACTIVE (ultra)");
+    expect(output.system.join("\n")).toContain("CAVEMAN MODE ACTIVE (megacave)");
     await transform(undefined, output);
     const hits = output.system.join("\n").match(/CAVEMAN MODE ACTIVE/g) ?? [];
     expect(hits.length).toBe(1);
+  });
+
+  test("/caveman status reports the mode without changing it", async () => {
+    const out = msg("/caveman status");
+    await hooks["chat.message"](undefined, out);
+    expect(out.parts[0].text).toContain("Report this status verbatim");
+    expect(out.parts[0].text).toContain("Caveman mode: megacave");
+    expect(config.readFlag(flag)).toBe("megacave");
   });
 });

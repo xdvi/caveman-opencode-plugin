@@ -6,11 +6,12 @@ import os from "node:os";
 
 const ROOT = join(import.meta.dir, "..");
 
+// The surgical install ships the v2 adapter plus the two CJS helpers. The
+// vendored v1 plugin.js is tracker-side contract material, never an
+// installed artifact.
 const PAIRS: Array<[string, string]> = [
   ["vendor/src/hooks/caveman-config.js", "caveman-config.cjs"],
   ["vendor/src/hooks/caveman-parse.js", "caveman-parse.cjs"],
-  ["vendor/src/plugins/opencode/plugin.js", "plugin.js"],
-  ["vendor/src/plugins/opencode/package.json", "package.json"],
 ];
 
 function candidates(): string[] {
@@ -29,7 +30,7 @@ function sha(path: string): string {
 
 const present = PAIRS.every(([, name]) => existsSync(join(INSTALLED, name)));
 describe.skipIf(!present)("installed payload", () => {
-  for (const [rel, name] of PAIRS.slice(0, 3)) {
+  for (const [rel, name] of PAIRS) {
     test(`${name} matches ${rel} byte for byte`, () => {
       expect(sha(join(INSTALLED, name))).toBe(sha(join(ROOT, rel)));
     });
@@ -39,5 +40,9 @@ describe.skipIf(!present)("installed payload", () => {
     const pkg = JSON.parse(readFileSync(join(INSTALLED, "package.json"), "utf8"));
     expect(pkg.name).toBe("caveman-opencode-plugin");
     expect(pkg.type).toBe("module");
+  });
+
+  test("legacy v1 plugin.js payload is pruned", () => {
+    expect(existsSync(join(INSTALLED, "plugin.js"))).toBe(false);
   });
 });

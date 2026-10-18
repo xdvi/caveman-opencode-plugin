@@ -24,7 +24,6 @@ This repository provides:
 
 ```text
 ├── adapter/
-│   ├── v1/caveman.ts          # Legacy OpenCode v1 loader shim
 │   └── v2/caveman.ts          # OpenCode v2 Effect adapter
 ├── scripts/
 │   ├── install-pinned.sh      # Surgical installer for OpenCode plugins directory
@@ -94,7 +93,7 @@ OPENCODE_CONFIG_DIR="/custom/path" sh scripts/install-pinned.sh
 
 Once installed, restart your OpenCode session or daemon:
 
-- **Switch mode**: `/caveman lite`, `/caveman full`, `/caveman ultra`
+- **Switch mode**: `/caveman`, `/ultracave`, `/megacave`
 - **Revert to normal**: Type `stop caveman` or `normal mode`
 - **Shell prompt**: `source shell/caveman-prompt.sh` (bash/zsh) or
   `shell/caveman-prompt.fish` (fish), then use `$(caveman_prompt_segment)`
@@ -129,8 +128,9 @@ sh scripts/sync-upstream.sh <commit-sha>
 `install-pinned.sh` deliberately installs a subset of the official payload:
 
 - In: v2 adapter, CJS helpers, 6 commands, skills
-  (`caveman`, `caveman-commit`, `caveman-review`, `caveman-help`,
-  `caveman-stats`, `caveman-compress` with scripts), Tier-3 `AGENTS.md` fence.
+  (`caveman`, `ultracave`, `megacave`, `caveman-commit`, `caveman-review`,
+  `caveman-help`, `caveman-stats`, `caveman-compress` with scripts), Tier-3
+  `AGENTS.md` fence.
 - Out: `cavecrew` agents and skill (Claude subagent dispatcher, no
   opencode command references them).
 - The Tier-3 fence is shorter than upstream's full ruleset; the per-turn

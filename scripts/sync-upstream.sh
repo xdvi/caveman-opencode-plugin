@@ -26,7 +26,9 @@ skills/caveman-review
 skills/caveman-help
 skills/caveman-stats
 skills/caveman-compress
-skills/cavecrew"
+skills/cavecrew
+skills/ultracave
+skills/megacave"
 
 sha="${1:-}"
 if [ -z "$sha" ]; then

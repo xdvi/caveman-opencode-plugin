@@ -7,7 +7,9 @@ const ROOT = join(import.meta.dir, "..");
 
 const home = mkdtempSync(join(tmpdir(), "caveman-v2-test-"));
 process.env.XDG_CONFIG_HOME = home;
-process.env.CAVEMAN_DEFAULT_MODE = "full";
+// A current-mode id, deliberately different from the built-in default so the
+// written flag proves the configured value was used.
+process.env.CAVEMAN_DEFAULT_MODE = "ultracave";
 process.env.CAVEMAN_HELPERS_DIR = join(ROOT, "vendor", "src", "hooks");
 
 const flag = join(home, "opencode", ".caveman-active");
@@ -49,10 +51,10 @@ describe("v2 adapter", () => {
     expect(typeof adapter.default.setup).toBe("function");
   });
 
-  test("setup writes the default flag", async () => {
+  test("setup writes the configured default mode", async () => {
     const { ctx } = makeCtx();
     await adapter.default.setup(ctx);
-    expect(readFileSync(flag, "utf8").trim()).toBe("full");
+    expect(readFileSync(flag, "utf8").trim()).toBe("ultracave");
   });
 
   test("session.created re-asserts the flag", async () => {
@@ -60,14 +62,14 @@ describe("v2 adapter", () => {
     rmSync(flag, { force: true });
     await adapter.default.setup(ctx);
     await waitFor(flag, true);
-    expect(readFileSync(flag, "utf8").trim()).toBe("full");
+    expect(readFileSync(flag, "utf8").trim()).toBe("ultracave");
   });
 
   test("prompt hook switches and clears the flag", async () => {
     const { ctx, hooks } = makeCtx();
     await adapter.default.setup(ctx);
-    await hooks["prompt"]({ prompt: { text: "/caveman ultra" } });
-    expect(readFileSync(flag, "utf8").trim()).toBe("ultra");
+    await hooks["prompt"]({ prompt: { text: "/megacave" } });
+    expect(readFileSync(flag, "utf8").trim()).toBe("megacave");
     await hooks["prompt"]({ prompt: { text: "stop caveman" } });
     expect(existsSync(flag)).toBe(false);
   });
@@ -75,11 +77,11 @@ describe("v2 adapter", () => {
   test("context hook injects one banner while active", async () => {
     const { ctx, hooks } = makeCtx();
     await adapter.default.setup(ctx);
-    await hooks["prompt"]({ prompt: { text: "/caveman ultra" } });
+    await hooks["prompt"]({ prompt: { text: "/megacave" } });
     const output = { system: [] as unknown[] };
     await hooks["context"](output);
     const joined = JSON.stringify(output.system);
-    expect(joined).toContain("CAVEMAN MODE ACTIVE (ultra)");
+    expect(joined).toContain("CAVEMAN MODE ACTIVE (megacave)");
     await hooks["context"](output);
     expect(JSON.stringify(output.system).match(/CAVEMAN MODE ACTIVE/g)?.length).toBe(1);
   });
@@ -97,31 +99,52 @@ describe("v2 adapter", () => {
   test("explicit session modes stick, untouched sessions follow global", async () => {
     const { ctx, hooks } = makeCtx();
     await adapter.default.setup(ctx);
-    await hooks["prompt"]({ sessionID: "a", prompt: { text: "/caveman ultra" } });
+    await hooks["prompt"]({ sessionID: "a", prompt: { text: "/megacave" } });
     const outA = { sessionID: "a", system: [] as unknown[] };
     const outB = { sessionID: "b", system: [] as unknown[] };
     await hooks["context"](outA);
     await hooks["context"](outB);
-    expect(JSON.stringify(outA.system)).toContain("CAVEMAN MODE ACTIVE (ultra)");
-    expect(JSON.stringify(outB.system)).toContain("CAVEMAN MODE ACTIVE (ultra)");
-    await hooks["prompt"]({ sessionID: "b", prompt: { text: "/caveman lite" } });
+    expect(JSON.stringify(outA.system)).toContain("CAVEMAN MODE ACTIVE (megacave)");
+    expect(JSON.stringify(outB.system)).toContain("CAVEMAN MODE ACTIVE (megacave)");
+    await hooks["prompt"]({ sessionID: "b", prompt: { text: "/caveman caveman" } });
     const outA2 = { sessionID: "a", system: [] as unknown[] };
     const outB2 = { sessionID: "b", system: [] as unknown[] };
     await hooks["context"](outA2);
     await hooks["context"](outB2);
-    expect(JSON.stringify(outA2.system)).toContain("CAVEMAN MODE ACTIVE (ultra)");
-    expect(JSON.stringify(outB2.system)).toContain("CAVEMAN MODE ACTIVE (lite)");
+    expect(JSON.stringify(outA2.system)).toContain("CAVEMAN MODE ACTIVE (megacave)");
+    expect(JSON.stringify(outB2.system)).toContain("CAVEMAN MODE ACTIVE (caveman)");
   });
 
   test("clear on one session leaves the other alone", async () => {
     const { ctx, hooks } = makeCtx();
     await adapter.default.setup(ctx);
-    await hooks["prompt"]({ sessionID: "a", prompt: { text: "/caveman ultra" } });
-    await hooks["prompt"]({ sessionID: "b", prompt: { text: "/caveman lite" } });
+    await hooks["prompt"]({ sessionID: "a", prompt: { text: "/megacave" } });
+    await hooks["prompt"]({ sessionID: "b", prompt: { text: "/caveman caveman" } });
     await hooks["prompt"]({ sessionID: "a", prompt: { text: "stop caveman" } });
     const outB = { sessionID: "b", system: [] as unknown[] };
     await hooks["context"](outB);
-    expect(JSON.stringify(outB.system)).toContain("CAVEMAN MODE ACTIVE (lite)");
+    expect(JSON.stringify(outB.system)).toContain("CAVEMAN MODE ACTIVE (caveman)");
+  });
+
+  test("manual default activates caveman on setup", async () => {
+    process.env.CAVEMAN_DEFAULT_MODE = "manual";
+    try {
+      const { ctx } = makeCtx();
+      await adapter.default.setup(ctx);
+      expect(readFileSync(flag, "utf8").trim()).toBe("caveman");
+    } finally {
+      process.env.CAVEMAN_DEFAULT_MODE = "ultracave";
+    }
+  });
+
+  test("/caveman status reports the mode without changing it", async () => {
+    const { ctx, hooks } = makeCtx();
+    await adapter.default.setup(ctx);
+    const input = { prompt: { text: "/caveman status" } };
+    await hooks["prompt"](input);
+    expect(input.prompt.text).toContain("Report this status verbatim");
+    expect(input.prompt.text).toContain("Caveman mode: ultracave");
+    expect(readFileSync(flag, "utf8").trim()).toBe("ultracave");
   });
 
   test("resolves vendored helpers without override", async () => {
